@@ -10,7 +10,9 @@ load_dotenv(override=True)
 
 class TokenPredictor:
     def __init__(self, model_name: str):
-        self.client = OpenAI()
+        OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+        OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')
+        self.client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
         self.messages = []
         self.predictions = []
         self.model_name = model_name
