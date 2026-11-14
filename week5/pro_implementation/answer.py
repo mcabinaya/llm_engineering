@@ -5,21 +5,24 @@ from litellm import completion
 from pydantic import BaseModel, Field
 from pathlib import Path
 from tenacity import retry, wait_exponential
-
+import os
+from sentence_transformers import SentenceTransformer
 
 load_dotenv(override=True)
+openai_api_key = os.getenv('OPENAI_API_KEY')
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')
 
 # MODEL = "openai/gpt-6-luna"
-MODEL = "groq/openai/gpt-oss-120b"
+MODEL = "openai/(paid) gpt-5.4" #"groq/openai/gpt-oss-120b"
 DB_NAME = str(Path(__file__).parent.parent / "preprocessed_db")
 KNOWLEDGE_BASE_PATH = Path(__file__).parent.parent / "knowledge-base"
 SUMMARIES_PATH = Path(__file__).parent.parent / "summaries"
 
 collection_name = "docs"
-embedding_model = "text-embedding-3-large"
+embedding_model = "sentence-transformers/all-MiniLM-L6-v2" #"text-embedding-3-large"
 wait = wait_exponential(multiplier=1, min=10, max=240)
 
-openai = OpenAI()
+openai = OpenAI(api_key=openai_api_key, base_url=OPENAI_BASE_URL)
 
 chroma = PersistentClient(path=DB_NAME)
 collection = chroma.get_or_create_collection(collection_name)
@@ -68,7 +71,7 @@ Reply only with the list of ranked chunk ids, nothing else. Include all the chun
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    response = completion(model=MODEL, messages=messages, response_format=RankOrder)
+    response = completion(model=MODEL, messages=messages, response_format=RankOrder, api_key=openai_api_key, base_url=OPENAI_BASE_URL)
     reply = response.choices[0].message.content
     order = RankOrder.model_validate_json(reply).order
     return [chunks[i - 1] for i in order]
@@ -113,7 +116,7 @@ user: What role covers? -> Query: What role FooBar covers?
 
 IMPORTANT: Respond ONLY with the precise knowledgebase query, nothing else.
 """
-    response = completion(model=MODEL, messages=[{"role": "system", "content": message}])
+    response = completion(model=MODEL, messages=[{"role": "system", "content": message}], api_key=openai_api_key, base_url=OPENAI_BASE_URL)
     return response.choices[0].message.content
 
 
@@ -127,7 +130,10 @@ def merge_chunks(chunks, reranked):
 
 
 def fetch_context_unranked(question):
-    query = openai.embeddings.create(model=embedding_model, input=[question]).data[0].embedding
+    # query = openai.embeddings.create(model=embedding_model, input=[question]).data[0].embedding
+    model = SentenceTransformer(embedding_model)
+    emb = model.encode([question])
+    query = emb.tolist()[0]
     results = collection.query(query_embeddings=[query], n_results=RETRIEVAL_K)
     chunks = []
     for result in zip(results["documents"][0], results["metadatas"][0]):
@@ -152,5 +158,5 @@ def answer_question(question: str, history: list[dict] = []) -> tuple[str, list]
     """
     chunks = fetch_context(question, history)
     messages = make_rag_messages(question, history, chunks)
-    response = completion(model=MODEL, messages=messages)
+    response = completion(model=MODEL, messages=messages, api_key=openai_api_key, base_url=OPENAI_BASE_URL)
     return response.choices[0].message.content, chunks

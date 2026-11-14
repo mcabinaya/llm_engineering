@@ -7,15 +7,17 @@ from tqdm import tqdm
 from litellm import completion
 from multiprocessing import Pool
 from tenacity import retry, wait_exponential
-
+import os
+from sentence_transformers import SentenceTransformer
 
 load_dotenv(override=True)
+openai_api_key = os.getenv('OPENAI_API_KEY')
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')
 
-MODEL = "openai/gpt-6-luna"
-
+MODEL = "openai/(paid) gpt-5.4" #"openai/gpt-6-luna"
 DB_NAME = str(Path(__file__).parent.parent / "preprocessed_db")
 collection_name = "docs"
-embedding_model = "text-embedding-3-large"
+embedding_model = "sentence-transformers/all-MiniLM-L6-v2" #"text-embedding-3-large"
 KNOWLEDGE_BASE_PATH = Path(__file__).parent.parent / "knowledge-base"
 AVERAGE_CHUNK_SIZE = 100
 wait = wait_exponential(multiplier=1, min=10, max=240)
@@ -23,7 +25,7 @@ wait = wait_exponential(multiplier=1, min=10, max=240)
 
 WORKERS = 3
 
-openai = OpenAI()
+openai = OpenAI(api_key=openai_api_key, base_url=OPENAI_BASE_URL)
 
 
 class Result(BaseModel):
@@ -103,7 +105,7 @@ def make_messages(document):
 @retry(wait=wait)
 def process_document(document):
     messages = make_messages(document)
-    response = completion(model=MODEL, extra_body={"reasoning_effort": "none"}, messages=messages, response_format=Chunks)
+    response = completion(model=MODEL, extra_body={"reasoning_effort": "none"}, messages=messages, response_format=Chunks, api_key=openai_api_key, base_url=OPENAI_BASE_URL)
     reply = response.choices[0].message.content
     doc_as_chunks = Chunks.model_validate_json(reply).chunks
     return [chunk.as_result(document) for chunk in doc_as_chunks]
@@ -127,8 +129,11 @@ def create_embeddings(chunks):
         chroma.delete_collection(collection_name)
 
     texts = [chunk.page_content for chunk in chunks]
-    emb = openai.embeddings.create(model=embedding_model, input=texts).data
-    vectors = [e.embedding for e in emb]
+    # emb = openai.embeddings.create(model=embedding_model, input=texts).data
+    # vectors = [e.embedding for e in emb]
+    model = SentenceTransformer(embedding_model)
+    emb = model.encode(texts)
+    vectors = emb.tolist()
 
     collection = chroma.get_or_create_collection(collection_name)
 

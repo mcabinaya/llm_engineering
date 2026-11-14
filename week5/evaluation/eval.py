@@ -3,14 +3,16 @@ import math
 from pydantic import BaseModel, Field
 from litellm import completion
 from dotenv import load_dotenv
-
+import os
 from evaluation.test import TestQuestion, load_tests
-from implementation.answer import answer_question, fetch_context
+from pro_implementation.answer import answer_question, fetch_context
 
 
 load_dotenv(override=True)
-
-MODEL = "openai/gpt-6-luna"
+openai_api_key = os.getenv('OPENAI_API_KEY')
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')
+# LiteLLM requires a provider prefix (openai/...). ChatOpenAI in answer.py does not.
+MODEL = "openai/(paid) gpt-5.4"  # or "openai/gpt-6-luna"
 db_name = "vector_db"
 
 
@@ -152,8 +154,15 @@ Provide detailed feedback and scores from 1 (very poor) to 5 (ideal) for each di
         },
     ]
 
-    # Call LLM judge with structured outputs (async)
-    judge_response = completion(model=MODEL, extra_body={"reasoning_effort": "none"}, messages=judge_messages, response_format=AnswerEval)
+    # Call LLM judge with structured outputs
+    # Do not pass reasoning_effort — LiteLLM proxies reject it for many models (e.g. gpt-6-luna)
+    judge_response = completion(
+        model=MODEL,
+        messages=judge_messages,
+        response_format=AnswerEval,
+        api_key=openai_api_key,
+        base_url=OPENAI_BASE_URL,
+    )
 
     answer_eval = AnswerEval.model_validate_json(judge_response.choices[0].message.content)
 

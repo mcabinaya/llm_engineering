@@ -4,17 +4,19 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage, convert_to_messages
 from langchain_core.documents import Document
-
 from dotenv import load_dotenv
-
+import os
 
 load_dotenv(override=True)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL')
 
-MODEL = "gpt-6-luna"
+
+MODEL = "(paid) gpt-5.4" # "gpt-6-luna"
 DB_NAME = str(Path(__file__).parent.parent / "vector_db")
 
-# embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 RETRIEVAL_K = 10
 
 SYSTEM_PROMPT = """
@@ -28,8 +30,7 @@ Context:
 
 vectorstore = Chroma(persist_directory=DB_NAME, embedding_function=embeddings)
 retriever = vectorstore.as_retriever()
-llm = ChatOpenAI(temperature=0, model_name=MODEL, reasoning_effort="none")
-
+llm = ChatOpenAI(temperature=0, model_name=MODEL, base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY, reasoning_effort="none")
 
 def fetch_context(question: str) -> list[Document]:
     """
